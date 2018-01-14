@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Newtonsoft.Json;
 
 namespace RSS2Twitter
@@ -17,6 +19,8 @@ namespace RSS2Twitter
         public string AccessTokenSecret { get; set; } = "";
         public string RssUrl { get; set; } = "";
         public int Frequency { get; set; } = 10;
+        public bool RemoveDuplicates { get; set; } = true;
+        public List<string> BlacklistedWords { get; set; } = new List<string>();
 
 
         public void Save(string dir = "setup/config.json")
@@ -52,13 +56,23 @@ namespace RSS2Twitter
                     Console.WriteLine("Y or N: ");
                     var res = Console.ReadKey();
                     if (res.KeyChar == 'N' || res.KeyChar == 'n')
-                        File.Delete("setup/config.json");
+                    {
+                        try
+                        {
+                            File.Delete("setup/config.json");
+                        }
+                        catch
+                        {
+                            //
+                        }
+                    }
+                        
 
                     if (!Directory.Exists(Path.Combine(AppContext.BaseDirectory, "setup/")))
                         Directory.CreateDirectory(Path.Combine(AppContext.BaseDirectory, "setup/"));
                 }
 
-
+                Console.Write("\n");
                 if (!File.Exists(ConfigPath))
                 {
                     var cfg = new Config();
@@ -73,7 +87,7 @@ namespace RSS2Twitter
                     cfg.ConsumerKey = Console.ReadLine();
                     Console.Write("Please enter your Consumer Key Secret (API Secret): \n");
                     cfg.ConsumerKeySecret = Console.ReadLine();
-                    Console.Write("Please enter your Access Token: ");
+                    Console.Write("Please enter your Access Token: \n");
                     cfg.AccessToken = Console.ReadLine();
                     Console.Write("Please enter your Access Token Secret: \n");
                     cfg.AccessTokenSecret = Console.ReadLine();
@@ -84,6 +98,23 @@ namespace RSS2Twitter
                     Console.Write("Please enter your desired frequency of RSS Update Checks \n" +
                                   "ie. 5 = RSS Updates are checked every 5 minutes: \n");
                     cfg.Frequency = Convert.ToInt32(Console.ReadLine());
+
+                    Console.Write("Please write any words/phrases you would like to blacklist from the RSS Updates, these words will be filtered and removed before being posted.\n" +
+                                  "Separate different words/phrases with a comma (,):\n");
+                    cfg.BlacklistedWords = Console.ReadLine()?.Split(',').ToList();
+
+                    Console.Write("Type Y if you would like to remove duplicate RSS Listings (based on title)\n" +
+                                  "Type N if you owuld like to allow these.\n");
+                    var res = Console.ReadKey();
+                    if (res.KeyChar == 'N' || res.KeyChar == 'n')
+                    {
+                        cfg.RemoveDuplicates = false;
+                    }
+                    else
+                    {
+                        cfg.RemoveDuplicates = true;
+                    }
+
 
                     cfg.Save();
                 }

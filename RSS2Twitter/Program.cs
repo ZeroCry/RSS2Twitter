@@ -1,16 +1,20 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
 using System.Xml.Linq;
+using Newtonsoft.Json;
 
 namespace RSS2Twitter
 {
     public class Program
     {
+        public List<string> CompletedList = new List<string>();
+
         public static void Main(string[] args)
         {
             new Program().Start().GetAwaiter().GetResult();
@@ -26,6 +30,15 @@ namespace RSS2Twitter
             var accessTokenSecret = Config.Load().AccessTokenSecret;
             var twitter = new TwitterApi(consumerKey, consumerKeySecret, accessToken, accessTokenSecret);
 
+            Console.WriteLine($"RSS URL: {Config.Load().RssUrl}\n" +
+                              $"Update Frequency: 1/{Config.Load().Frequency} minutes\n" +
+                              $"Blacklist: {string.Join(", ", Config.Load().BlacklistedWords)}\n");
+
+            if (File.Exists(Path.Combine(AppContext.BaseDirectory, "setup/log.json")))
+            {
+                CompletedList = JsonConvert.DeserializeObject<List<string>>(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "setup/log.json")));
+            }
+
             while (true)
             {
                 var feedItems = (await Index(Config.Load().RssUrl)).Where(x =>
@@ -34,14 +47,26 @@ namespace RSS2Twitter
                 foreach (var item in feedItems)
                     try
                     {
-                        //if (item.Title.ToLower().Contains("sock"))
-                        //    throw new Exception("Proxy");
+                        if (CompletedList.Any(x =>
+                            string.Equals(x, item.Title, StringComparison.CurrentCultureIgnoreCase)) && Config.Load().RemoveDuplicates)
+                        {
+                            throw new Exception($"REMOVED DUPLICATE: {item.Title}");
+                        }
+                        if (Config.Load().BlacklistedWords.Any(x => string.Equals(x, item.Title, StringComparison.CurrentCultureIgnoreCase)))
+                        {
+                            throw new Exception($"BLACKLISTED: {item.Title}");
+                        }
 
                         await twitter.Tweet($"{item.Title}\n" +
                                             $"{item.Link}");
                         Console.WriteLine(
                             $"{item.Title}                                                                    "
                                 .Substring(0, 30));
+
+                        CompletedList.Add(item.Title.ToLower());
+
+                        var file = Path.Combine(AppContext.BaseDirectory, "setup/log.json");
+                        File.WriteAllText(file, JsonConvert.SerializeObject(CompletedList, Formatting.Indented));
 
                         await Task.Delay(1000);
                     }
